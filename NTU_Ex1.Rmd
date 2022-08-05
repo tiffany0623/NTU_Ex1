@@ -1,0 +1,225 @@
+---
+title: "NTU Exercise1"
+author: "Yu Tian"
+date: "2022-08-04"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      results = 'markup',
+                      fig.width = 4,
+                      fig.height = 3,
+                      fig.align = 'center',
+                      message = F,
+                      warning = F)
+```
+
+## Package 
+```{r}
+#package
+library(dplyr)
+
+#set seed
+set.seed(0623)
+```
+
+## Preparation
+```{r}
+# Read (and import) the full exercise data set into R using read.csv()
+data1 <- read.csv(file = 'Data_exercise1.csv')
+
+# view the data example in R
+data1 %>% head()
+```
+
+
+## 1. Make a plot using log(budget) on the x-axis and log(gross) on the y-axis.
+```{r}
+# simple plot
+plot(log(data1$budget),   #log(budget) on the x-axis
+     log(data1$gross),    #log(gross) on the y-axis
+     main = "Plot of log(budget) versus log(gross)",
+     xlab = "log(budget)", ylab = "log(gross)")
+```
+
+
+## 2. 
+### add legend to the plot. Change the color/shape/size of the dots. 
+### make the y-axis lable horizontal  
+
+```{r}
+plot(log(data1$budget), log(data1$gross), 
+     col = "blue",  # change the color
+     pch = 20,  # change the shape
+     cex = 0.8,  # change the size
+     las = 1,  # make the y-axis lable horizontal
+     main = "Plot of log(budget) versus log(gross)",
+     xlab = "log(budget)", ylab = "log(gross)")
+
+# add a legend
+legend("topleft", "points of log(budget) vs log(gross)", 
+       pch = 20, col="blue", 
+       pt.cex = 1.2, cex = 0.8)
+```
+
+
+## 3.  
+### Pre
+```{r}
+# package
+library(rvest)
+library(stringr)
+
+# read the website "Basketball-Reference.com"
+BR=read_html('https://www.basketball-reference.com/')
+```
+
+### Scrape data (more than 100 observations, e.g. player game points) from Basketball-Reference.com
+```{r}
+# teams information
+teams=BR %>%
+  html_nodes("#teams .left a") %>%
+  html_text()
+
+teams_link=BR %>%
+  html_nodes("#teams .left a")%>% 
+  html_attr('href')
+
+teams_info=data.frame(teams,teams_link)
+```
+
+
+```{r}
+# all player names by looping over all teams
+players_name=c()
+for (i in 1:nrow(teams_info)) {
+  team_link=paste0('https://www.basketball-reference.com',teams_info$teams_link[i])
+  
+  BR=read_html(team_link)
+  
+  players=BR %>%
+    html_nodes(".iz+ .left a") %>%
+    html_text()
+  
+  players_link=BR %>%
+    html_nodes(".iz+ .left a") %>%
+    html_attr('href')
+  
+  players_name_i=data.frame(players,players_link)
+  
+  players_name=rbind(players_name,players_name_i)
+}
+View(players_name)
+```
+
+
+```{r}
+# players information by looping all player names
+players_info=c()
+for (i in 1:nrow(players_name)) {
+  player_link=paste0('https://www.basketball-reference.com',
+                     players_name$players_link[i])
+  
+  BR=read_html(player_link)
+  
+  players_FGP=BR %>%
+    html_nodes(".p2 div:nth-child(1) p+ p") %>%
+    html_text()
+  
+  if(length(players_FGP)==0) {
+    players_FGP = 0
+  }
+  
+  players_FG3P=BR %>%
+    html_nodes(".p2 div:nth-child(2) p+ p") %>%
+    html_text()
+  
+  if(length(players_FG3P)==0) {
+    players_FG3P = 0
+  }
+  
+   players_FTP=BR %>%
+    html_nodes(".p2 div:nth-child(3) p+ p") %>%
+    html_text()
+   
+   if(length(players_FTP)==0) {
+    players_FTP = 0
+  }
+  
+  players_eFGP=BR %>%
+    html_nodes(".p2 div:nth-child(4) p+ p") %>%
+    html_text()
+  
+  if(length(players_eFGP)==0) {
+    players_eFGP = 0
+  }
+  
+   players_PER=BR %>%
+    html_nodes(".p3 div:nth-child(1) p+ p") %>%
+    html_text()
+   
+   if(length(players_PER)==0) {
+    players_PER = 0
+  }
+  
+  players_info_i=data.frame(players_name$players[i],
+                            as.numeric(players_FGP),
+                            as.numeric(players_FG3P),
+                            as.numeric(players_FTP),
+                            as.numeric(players_eFGP),
+                            as.numeric(players_PER))
+  
+  players_info=rbind(players_info,players_info_i)
+}
+
+# view the players information in R
+players_info %>% head(15)
+```
+
+
+### Run a regression model to answer a question. (Linear regression)
+
+#### Question: Use players_PER as dependent variable; and players_FGP, players_FG3P, players_FTP, players_eFGP as independent variables. Is there a strong correlation between dependent variable and other independent variables? Does this linear regression model fit the data well?
+
+- * PER: Player Efficiency Rating
+- * FGP: Field Goal Percentage
+- * FG3P: 3-Point Field Goal Percentage
+- * FTP: Free Throw Percentage
+- * eFGP: Effective Field Goal Percentage
+
+```{r}
+# replace zero(0) with NA and remove the NA value
+players_info_1 <- players_info %>% 
+  mutate_all(~na_if(., 0.0)) %>%
+  na.omit(players_info_1)
+
+# Change columns (variables) name
+colnames(players_info_1) <- c("players_name", "players_FGP", "players_FG3P", "players_FTP", "players_eFGP", "players_PER")
+
+players_info_1 %>% head(15)
+```
+
+
+```{r}
+# run a linear regression model
+lr_players_info <- lm(players_PER ~ players_FGP + players_FG3P + players_FTP + players_eFGP, data = players_info_1)
+# show the regression results
+summary(lr_players_info)
+```
+From the p value above, we can find that these coefficient of all independent variable is significant. However, from the R-squared value above, we can find this model id not fitting the data very well.
+
+
+## 4. Output the results using 'stargazer'
+```{r}
+# package
+library(stargazer)
+
+# output the regression results
+stargazer(lr_players_info, type = "text", title = "Linear regression model of player information")
+```
+
+
+
+
+
